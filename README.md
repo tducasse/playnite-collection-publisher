@@ -242,11 +242,16 @@ copy of `Battlefield V` meets `Battlefield™ V Year 2 Edition`. Equality is sti
 required on the whole key, so `Doom` does not meet `Doom Eternal`.
 
 Consequence for the site's filter: `Everything` / `Owned only` / `Game Pass
-only` are disjoint. A game you own *and* that is in Game Pass is neither "only
-owned" nor "only Game Pass" - it is already yours, and Game Pass adds nothing -
-so it lives under `Everything`. The same goes for a licence that is neither owned
-nor currently in Game Pass (a Ubisoft+/EA Play title that left the catalogue).
-The option labels carry live counts.
+only`. "Owned" means **a licence in one of your accounts that is not a Game Pass
+entitlement** - a Steam purchase, a family share, or a Ubisoft Connect/EA app
+licence for a title that is not in the catalogue today. Playnite records the
+account, not whether you paid for it, so a Ubisoft+ rental and a Ubisoft purchase
+look identical; both are "yours to launch", which is what the filter is for.
+
+Every card is therefore yours, or in Game Pass, or both - there is no third
+state, and `Everything` is exactly mine + Game Pass. The only thing the two
+narrow views leave out is the "both" bucket (already yours, so Game Pass adds
+nothing), which the caption under the select counts.
 
 ## Development
 
