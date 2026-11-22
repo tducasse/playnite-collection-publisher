@@ -337,7 +337,14 @@ function Get-XboxProducts {
 function Get-GamePassCatalog {
     param([switch]$ForceRefresh)
 
-    $cache = Join-Path (Get-GfnDataDir) 'gamepass-v2.json'
+    # Two caches:
+    #   gamepass.json         assembled list, refreshed at most CacheHours
+    #   gamepass-details.json productId -> { Title, Publisher, Categories }
+    # The catalogue API returns ~78 KB per product (image metadata, SKUs, long
+    # descriptions) and we only need four fields, so details are fetched once per
+    # product and kept across refreshes. A normal refresh downloads only the id
+    # lists plus whatever was added since.
+    $cache = Join-Path (Get-GfnDataDir) 'gamepass.json'
     if (-not $ForceRefresh) {
         $cached = Get-CachedJson -Path $cache -MaxAgeHours $script:Config.CacheHours
         if ($cached) {
@@ -346,21 +353,60 @@ function Get-GamePassCatalog {
         }
     }
 
-    Write-GfnLog 'Downloading PC Game Pass catalogue...'
+    Write-GfnStatus 'Checking the PC Game Pass catalogue...'
     $pcIds = Get-XboxCatalogList -ListId $script:Config.GpListId
     $eaIds = @()
     try { $eaIds = Get-XboxCatalogList -ListId $script:Config.EaListId } catch { Write-GfnLog "EA Play list failed: $($_.Exception.Message)" }
+    $eaSet = @{}
+    foreach ($id in $eaIds) { $eaSet[$id] = $true }
+    Write-GfnLog "Game Pass ids: $($pcIds.Count) (EA Play: $($eaIds.Count))"
 
-    $products = @(Get-XboxProducts -Ids $pcIds)
-    $eaTitles = @{}
-    if ($eaIds.Count -gt 0) {
-        foreach ($p in @(Get-XboxProducts -Ids $eaIds)) { $eaTitles[$p.Title] = $true }
+    $detailsPath = Join-Path (Get-GfnDataDir) 'gamepass-details.json'
+    $details = @{}
+    $cachedDetails = Read-GfnJsonFile -Path $detailsPath
+    if ($cachedDetails) {
+        foreach ($prop in $cachedDetails.PSObject.Properties) {
+            $details[$prop.Name] = $prop.Value
+        }
     }
 
-    foreach ($p in $products) {
-        $p | Add-Member -NotePropertyName 'IsEaPlay' -NotePropertyValue $eaTitles.ContainsKey($p.Title) -Force
+    $missing = @($pcIds | Where-Object { -not $details.ContainsKey($_) })
+    if ($missing.Count -gt 0) {
+        Write-GfnStatus "Fetching details for $($missing.Count) new Game Pass titles (first run: ~40 MB)..."
+        $fetchCount = $missing.Count
+        foreach ($p in @(Get-XboxProducts -Ids $missing)) {
+            if (-not $p) { continue }
+            $details[$p.Id] = [pscustomobject]@{
+                Title      = $p.Title
+                Publisher  = $p.Publisher
+                Categories = @($p.Categories)
+            }
+        }
+        Write-GfnLog "Fetched details for $fetchCount new titles"
+        Save-Json -Object $details -Path $detailsPath
+    } else {
+        Write-GfnLog 'No new Game Pass titles'
     }
 
+    # drop titles that left the catalogue
+    foreach ($key in @($details.Keys)) {
+        if ($pcIds -notcontains $key) { $details.Remove($key) }
+    }
+
+    $products = New-Object System.Collections.Generic.List[object]
+    foreach ($id in $pcIds) {
+        $d = $details[$id]
+        if (-not $d) { continue }
+        $products.Add([pscustomobject]@{
+            Id         = $id
+            Title      = $d.Title
+            Publisher  = $d.Publisher
+            Categories = @($d.Categories)
+            IsEaPlay   = $eaSet.ContainsKey($id)
+        })
+    }
+
+    $products = $products.ToArray()
     Save-Json -Object $products -Path $cache
     return $products
 }
