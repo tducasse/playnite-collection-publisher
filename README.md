@@ -180,10 +180,22 @@ written before the `Package` field existed is refilled on the next run.
 The site applies the same rules as a fallback (`launcher`, else game id, else
 publisher), so an existing `games.json` renders correctly without a republish.
 
-`Game Pass` is a second, independent label, and it is only shown when the title
-is really in the catalogue. For an `EA app` or `Ubisoft Connect` licence that
-means the catalogue is the evidence: a Ubisoft Connect game that left Game Pass
-is just `Ubisoft`, and Apex Legends is `EA`, not `EA` + `Game Pass`.
+`Game Pass` is a second, independent label, and it is shown only when the title
+is really in the catalogue *today* - the source name and `access` field are not
+evidence. `access: gamepass` just means "the licence came from a subscription":
+a Ubisoft Connect game that left Game Pass is `Ubisoft`, Apex Legends is `EA`,
+and Deep Rock Galactic (Playnite's "Xbox Game Pass" source) is `Xbox`.
+
+Catalogue membership is tested with the same normalisation as the GFN matcher,
+plus the SKU suffixes the store adds (`Year 2 Edition`, `Revolution`, `Maximum
+Edition`, `EA Play Edition`, `for Windows + Launcher`, `(PC)`, …), so a library
+copy of `Battlefield V` meets `Battlefield™ V Year 2 Edition`. Equality is still
+required on the whole key, so `Doom` does not meet `Doom Eternal`.
+
+Consequence for the site's filter: `Everything` / `I own it` / `On Game Pass`
+overlap on purpose (a game you own can also be in Game Pass), so the option
+labels carry live counts, and a licensed-but-not-in-Game-Pass title appears under
+`Everything` only.
 
 ## Development
 
