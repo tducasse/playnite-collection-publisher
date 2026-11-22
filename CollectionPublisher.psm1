@@ -278,6 +278,122 @@ $script:NoiseWords = @(
     'preview', 'cross', 'gen', 'english', 'us'
 )
 
+# ---------------------------------------------------------------------------
+# Game identity (one card per game, not per store SKU)
+# ---------------------------------------------------------------------------
+# The site shows one card per game, so the same title filed under different store
+# names has to collapse: "For Honor" + "For Honor Standard", "AC IV Black Flag" +
+# "AC IV Black Flag - Gold Edition", "Heroes of Might & Magic III" + "Heroes of
+# Might and Magic 3 - Complete Edition".
+#
+# Identity is decided here, once per publish, and written as `group` on every
+# row - the site never guesses. Rules are, in order:
+#   1. store SKU suffixes the catalogue adds (Year 2, Revolution, Maximum, ...)
+#   2. edition/platform noise (ConvertTo-GfnKey already drops it)
+#   3. whatever is left is the group key
+# Anything those rules get wrong is pinned in groups.json (title -> title), so a
+# future mismatch costs one line in a JSON file, not a code change.
+
+$script:GroupExtraNoise = @('revolution', 'hunter', 'maximum', 'launcher', 'play', 'ea')
+$script:GroupAliases = @{}
+
+function ConvertTo-GroupKeyRaw {
+    param([string]$Title)
+
+    if ([string]::IsNullOrWhiteSpace($Title)) { return '' }
+    # The site's own key does the same three steps, so a row grouped by the
+    # pipeline and the same row grouped by the fallback land on one card:
+    #   apostrophes become a space ("Assassin's" -> "assassin s"),
+    #   a trailing "for Windows"/"for PC" is store filler, not a title,
+    #   "Year 2"/"Season 3" are SKU counters.
+    $clean = $Title -replace '[\u2122\u00AE\u00A9\u2120]', ' '
+    $clean = $clean -replace "['\u2018\u2019\u0060\u00B4]", ' '
+    $clean = [regex]::Replace($clean, '\s+for\s+(windows|pc)\b.*$', ' ', 'IgnoreCase')
+    $clean = [regex]::Replace($clean, '\b(year|season)\s+\d+\b', ' ', 'IgnoreCase')
+    $clean = [regex]::Replace($clean, '\(\s*(19|20)\d\d\s*\)', ' ')
+    $clean = [regex]::Replace($clean, '\b(19|20)\d\d\s+edition\b', ' ', 'IgnoreCase')
+    $key = ConvertTo-GfnKey -Title $clean
+    if (-not $key) { return '' }
+    $tokens = @($key -split ' ' | Where-Object { $_ -and ($script:GroupExtraNoise -notcontains $_) })
+    return ($tokens -join ' ')
+}
+
+function Get-GroupKey {
+    param([string]$Title)
+
+    $key = ConvertTo-GroupKeyRaw -Title $Title
+    if ($key -and $script:GroupAliases.ContainsKey($key)) {
+        return $script:GroupAliases[$key]
+    }
+    return $key
+}
+
+function Get-GroupAliases {
+    <#
+        Optional identity pins, read from groups.json in the extension data folder:
+            { "For Honor Standard": "For Honor", "NEW MONOPOLY": "MONOPOLY" }
+        Both sides are matched by group key, so the file stays readable.
+    #>
+    $path = Join-Path (Get-GfnDataDir) 'groups.json'
+    $defaults = [ordered]@{
+        'For Honor Standard'                               = 'For Honor'
+        'NEW MONOPOLY'                                     = 'MONOPOLY'
+        'Valiant Hearts: The Great War'                    = 'Valiant Hearts'
+        "Assassin's Creed Freedom Cry - Standalone"        = "Assassin's Creed Freedom Cry"
+        "Tom Clancy's Rainbow Six® Siege - Elite Edition"  = "Tom Clancy's Rainbow Six Siege"
+    }
+
+    if (-not (Test-Path -LiteralPath $path)) {
+        ConvertTo-Json -InputObject $defaults -Depth 3 | Set-Content -LiteralPath $path -Encoding UTF8
+    }
+
+    $map = @{}
+    $raw = Read-GfnJsonFile -Path $path
+    if (-not $raw) { return $map }
+    foreach ($prop in $raw.PSObject.Properties) {
+        $from = ConvertTo-GroupKeyRaw -Title $prop.Name
+        $to = ConvertTo-GroupKeyRaw -Title ([string]$prop.Value)
+        if ($from -and $to) { $map[$from] = $to }
+    }
+    return $map
+}
+
+function Set-GameGroup {
+    <#
+        Stamps `group` on every row and reports what was merged, so a surprise
+        collapse is visible in gfncheck.log instead of being discovered later.
+    #>
+    param([object[]]$Rows)
+
+    $script:GroupAliases = Get-GroupAliases
+    $byKey = @{}
+    $aliased = 0
+
+    foreach ($row in $Rows) {
+        if (-not $row) { continue }
+        $key = Get-GroupKey -Title ([string]$row.name)
+        if (ConvertTo-GroupKeyRaw -Title ([string]$row.name) -ne $key) { $aliased++ }
+        $row | Add-Member -NotePropertyName group -NotePropertyValue $key -Force
+        if (-not $key) { continue }
+        $names = @()
+        if ($byKey.ContainsKey($key)) { $names = @($byKey[$key]) }
+        $names += [string]$row.name
+        $byKey[$key] = $names
+    }
+
+    $merged = 0
+    foreach ($key in @($byKey.Keys)) {
+        $names = @($byKey[$key] | Select-Object -Unique)
+        if ($names.Count -le 1) { continue }
+        $merged++
+        if ($merged -le 15) {
+            Write-GfnLog ("group '{0}' <- {1}" -f $key, ($names -join ' + '))
+        }
+    }
+    Write-GfnLog ("Identity: {0} groups, {1} with more than one store name, {2} rows matching a pin" -f $byKey.Count, $merged, $aliased)
+    return $byKey.Count
+}
+
 function ConvertTo-GfnKey {
     <#
         Turns a store title into a comparable key:
@@ -1126,6 +1242,7 @@ function Publish-SiteData {
     if (-not (Test-Path -LiteralPath $dataDir)) { New-Item -ItemType Directory -Path $dataDir -Force | Out-Null }
 
     Write-GfnStatus 'Writing data/games.json...'
+    $null = Set-GameGroup -Rows (@($Result.games) + @($Result.gamePass))
     $payload = [pscustomobject]@{
         generatedAt = (Get-Date).ToString('o')
         catalog     = $Result.catalog

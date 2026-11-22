@@ -132,11 +132,12 @@ overwritten.
   "generatedAt": "…", "catalog": { "country": "GB", "titles": 6347 },
   "stats": { "streamable": 522, "notStreamable": 1816, … },
   "games": [ { "name": "Hades", "store": "Steam", "launcher": "Steam",
-               "access": "owned",
+               "group": "hades", "access": "owned",
                "gfn": "yes|other|no|na", "gfnStores": ["STEAM"],
                "sync": "auto|mark|claim+mark", "releaseDate": "2020-09-17",
                "criticScore": 92, "links": [ { "name": "Steam", "url": "…" } ], … } ],
-  "gamePass": [ { "name": "Hades II", "launcher": "Xbox", "gfn": "no", … } ]
+  "gamePass": [ { "name": "Hades II", "launcher": "Xbox", "group": "hades 2",
+                  "gfn": "no", … } ]
 }
 ```
 
@@ -186,6 +187,48 @@ written before the `Package` field existed is refilled on the next run.
 The site applies the same rules as a fallback (`launcher`, else game id, else
 publisher), so an existing `games.json` renders correctly without a republish.
 
+### Game identity (one card per game)
+
+`group` is decided by the publisher, once per run, and written on every row - the
+site never guesses. The same game filed under different store names collapses to
+one card:
+
+```
+"For Honor"                                -> for honor
+"For Honor Standard"                       -> for honor
+"Heroes of Might & Magic III Complete Ed." -> heroes might and magic 3
+"Heroes of Might and Magic 3 - Complete"   -> heroes might and magic 3
+"Battlefield™ V Year 2 Edition"            -> battlefield 5
+"Watch Dogs®2"                             -> watch dogs 2
+"Doom" / "Doom Eternal"                    -> doom / doom eternal   (kept apart)
+```
+
+The rules, in order: trademark glyphs become a separator (`®2` -> ` 2`), a
+trailing `for Windows`/`for PC` is dropped, `Year 2` / `Season 3` counters are
+dropped, parenthesised years are dropped, `&` is read as `and`, editions and
+platform noise are dropped (the same list the GFN matcher uses), and a few SKU
+words (`revolution`, `hunter`, `maximum`, `launcher`, `play`, `ea`) with it.
+
+Anything those rules get wrong is pinned in `groups.json` next to
+`settings.json`, in plain titles:
+
+```json
+{ "For Honor Standard": "For Honor", "NEW MONOPOLY": "MONOPOLY" }
+```
+
+Every publish logs what it merged, so a surprise collapse is visible rather than
+discovered on the site:
+
+```
+group 'for honor' <- For Honor + For Honor Standard
+Identity: 2311 groups, 44 with more than one store name, 4 rows matching a pin
+```
+
+Store ids (`Steam` appid, GOG/Ubisoft/itch ids, EA `Origin.OFR…`/`OFB-EAST:…`
+offers, MS package family names and Game Pass product ids) are per-store and do
+not join across stores, so they cannot be the card key on their own; they *are*
+used for the launcher and the store link.
+
 `Game Pass` is a second, independent label, and it is shown only when the title
 is really in the catalogue *today* - the source name and `access` field are not
 evidence. `access: gamepass` just means "the licence came from a subscription":
@@ -215,6 +258,7 @@ tests/
   test-publish.ps1    snapshot -> matching -> games.json -> git commit + push
   test-background.ps1 Start-Publish in a background runspace (the crash path)
   test-launcher.ps1   launcher resolution (source, game id, store package)
+  test-groups.ps1     game identity: group keys, groups.json pins, stamping
   check-catalog.ps1   live Game Pass catalogue -> packages -> launchers
 ```
 
