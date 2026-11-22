@@ -21,7 +21,11 @@ A static site (no backend, no CDN, no build step) with:
   (`Steam`, `Epic`, `GOG`, `EA`, `Ubisoft`, `Xbox`, `Battle.net`, `Riot`, `itch`)
   and, separately, `Game Pass` when the title is in the catalogue. An EA Play
   title reads `EA` + `Game Pass`, not "EA app + gamepass"
-- a **segmented filter**: `All` / `On GFN` / `Not on GFN`, plus genre and store
+- a **segmented filter**: `All` / `On GFN` / `Not on GFN`, plus genre, stores
+  (multi-select menu), access (`Everything` / `Owned only` / `Game Pass only`,
+  with live counts) and sort
+- **the URL is the state**: every filter is in the hash, discrete changes push a
+  history entry (Back undoes them) and a link opens the same view on a phone
 - **one click per game** opens its store page (Steam/Epic/GOG/itch from Playnite
   metadata, the Microsoft Store page for Game Pass titles built from the product id)
 - **sorting**: A–Z, best critics, best community, newest
