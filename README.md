@@ -192,10 +192,12 @@ Edition`, `EA Play Edition`, `for Windows + Launcher`, `(PC)`, …), so a librar
 copy of `Battlefield V` meets `Battlefield™ V Year 2 Edition`. Equality is still
 required on the whole key, so `Doom` does not meet `Doom Eternal`.
 
-Consequence for the site's filter: `Everything` / `I own it` / `On Game Pass`
-overlap on purpose (a game you own can also be in Game Pass), so the option
-labels carry live counts, and a licensed-but-not-in-Game-Pass title appears under
-`Everything` only.
+Consequence for the site's filter: `Everything` / `Owned only` / `Game Pass
+only` are disjoint. A game you own *and* that is in Game Pass is neither "only
+owned" nor "only Game Pass" - it is already yours, and Game Pass adds nothing -
+so it lives under `Everything`. The same goes for a licence that is neither owned
+nor currently in Game Pass (a Ubisoft+/EA Play title that left the catalogue).
+The option labels carry live counts.
 
 ## Development
 
