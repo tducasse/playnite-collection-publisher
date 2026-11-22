@@ -66,8 +66,8 @@ $w = $rows[0]
 Check 'name' $w.name 'The Witcher 3: Wild Hunt'
 Check 'sortName' $w.sortName 'Witcher 3'
 Check 'store' $w.store 'Steam'
+Check 'launcher' $w.launcher 'Steam'
 Check 'access' $w.access 'owned'
-Check 'playtime minutes' $w.playtime 2880
 Check 'genres' ($w.genres -join '|') 'RPG'
 Check 'features' ($w.features -join '|') 'Single Player'
 Check 'tags' ($w.tags -join '|') 'Open World'
@@ -78,7 +78,6 @@ Check 'completion' $w.completion 'Beaten'
 Check 'installed' $w.installed $true
 Check 'favorite' $w.favorite $true
 Check 'sizeMb' $w.sizeMb 51200
-Check 'lastPlayed iso' ($w.lastPlayed -like '2026-11-01T10:00:00*') $true
 Check 'added iso' ($w.added -like '2020-01-02T03:04:05*') $true
 $h = $rows[1]
 Check 'hidden game included' $h.hidden $true

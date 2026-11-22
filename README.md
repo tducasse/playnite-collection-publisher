@@ -17,6 +17,10 @@ A static site (no backend, no CDN, no build step) with:
 
 - **one row per game**, not per purchase — a title owned on Steam *and* available
   via Game Pass is one line showing both routes
+- **two independent labels per game**: the launcher it really starts from
+  (`Steam`, `Epic`, `GOG`, `EA`, `Ubisoft`, `Xbox`, `Battle.net`, `Riot`, `itch`)
+  and, separately, `Game Pass` when the title is in the catalogue. An EA Play
+  title reads `EA` + `Game Pass`, not "EA app + gamepass"
 - a **segmented filter**: `All` / `On GFN` / `Not on GFN`, plus genre and store
 - **one click per game** opens its store page (Steam/Epic/GOG/itch from Playnite
   metadata, the Microsoft Store page for Game Pass titles built from the product id)
@@ -121,11 +125,12 @@ overwritten.
 {
   "generatedAt": "…", "catalog": { "country": "GB", "titles": 6347 },
   "stats": { "streamable": 522, "notStreamable": 1816, … },
-  "games": [ { "name": "Hades", "store": "Steam", "access": "owned",
+  "games": [ { "name": "Hades", "store": "Steam", "launcher": "Steam",
+               "access": "owned",
                "gfn": "yes|other|no|na", "gfnStores": ["STEAM"],
                "sync": "auto|mark|claim+mark", "releaseDate": "2020-09-17",
                "criticScore": 92, "links": [ { "name": "Steam", "url": "…" } ], … } ],
-  "gamePass": [ { "name": "Hades II", "gfn": "no", … } ]
+  "gamePass": [ { "name": "Hades II", "launcher": "Xbox", "gfn": "no", … } ]
 }
 ```
 
@@ -151,6 +156,35 @@ On a 1,900-game library this resolves 99%+ exactly; GFN's own per-connector coun
 (121 Steam, 58 Ubisoft, 1 GOG, 196 Xbox) match the computed numbers within a few
 titles.
 
+### Which launcher a game starts from
+
+`store` is the Playnite source. `launcher` is what pressing *Play* actually
+starts, and they are not the same thing: Game Pass hands some titles to another
+publisher. The Microsoft Store build of an EA Play or Ubisoft game is a ~10 MB
+stub that installs and starts the EA app or Ubisoft Connect, while the Xbox app
+shows it as a normal install. Static, in order of trust:
+
+| evidence | reads as |
+| --- | --- |
+| EA Play list (`1d33fbb9…`) | `EA`, always |
+| product `Properties.PackageFamilyName` | `ElectronicArtsMobile.*` → `EA`, `Ubisoft.*` → `Ubisoft`, `Blizzard*` → `Battle.net`, `Riot*` → `Riot`, anything else → `Xbox` |
+| Playnite game id of an MS Store row | `Origin.OFR…` / `OFB-EAST:…` → `EA`, `Microsoft.*_8wekyb3d8bbwe` → `Xbox` |
+| publisher | `Electronic Arts` → `EA`, `Ubisoft` → `Ubisoft`, `Blizzard` → `Battle.net`, `Riot Games` → `Riot` |
+| source name | `Steam`, `Epic`, `GOG`, `itch.io`, `Battle.net`, `Riot Games`, `EA app`, `Ubisoft Connect` |
+
+Catalogue entries are often bundles; the package lives on the product they
+bundle, so one extra request follows `BundledSkus` (this resolves a package for
+605/605 titles). The package is cached in `gamepass-details.json`; a cache
+written before the `Package` field existed is refilled on the next run.
+
+The site applies the same rules as a fallback (`launcher`, else game id, else
+publisher), so an existing `games.json` renders correctly without a republish.
+
+`Game Pass` is a second, independent label, and it is only shown when the title
+is really in the catalogue. For an `EA app` or `Ubisoft Connect` licence that
+means the catalogue is the evidence: a Ubisoft Connect game that left Game Pass
+is just `Ubisoft`, and Apex Legends is `EA`, not `EA` + `Game Pass`.
+
 ## Development
 
 ```
@@ -160,6 +194,8 @@ tests/
   test-settings.ps1   settings round-trip
   test-publish.ps1    snapshot -> matching -> games.json -> git commit + push
   test-background.ps1 Start-Publish in a background runspace (the crash path)
+  test-launcher.ps1   launcher resolution (source, game id, store package)
+  check-catalog.ps1   live Game Pass catalogue -> packages -> launchers
 ```
 
 ```powershell

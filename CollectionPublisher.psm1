@@ -67,6 +67,97 @@ $script:Config = @{
 }
 
 # ---------------------------------------------------------------------------
+# Launcher: what actually starts when you press Play
+# ---------------------------------------------------------------------------
+# A store name is not a launcher. Game Pass hands a title to whoever owns it:
+# the Microsoft Store build of an EA Play or Ubisoft game is a ~10 MB stub that
+# installs and starts the EA app or Ubisoft Connect (the Xbox app shows it as a
+# normal install). Playnite only records the source, "Xbox Game Pass", so the
+# real launcher has to come from somewhere else. Two static facts settle it:
+#   * the Playnite game id of an MS Store title - "Origin.OFR..."/"OFB-EAST:"
+#     is an EA app offer, "Ubisoft.PC..." a Ubisoft Connect package
+#   * the package family name of the store product itself - the publisher that
+#     owns the stub (ElectronicArtsMobile.*, Ubisoft.*, Blizzard*, Riot*)
+# Everything else in the Microsoft Store is a native Xbox app package.
+
+$script:SourceLauncher = @{
+    'Steam'                = 'Steam'
+    'Steam Family Sharing' = 'Steam'
+    'Epic'                 = 'Epic'
+    'GOG'                  = 'GOG'
+    'itch.io'              = 'itch'
+    'Humble'               = 'Humble'
+    'Battle.net'           = 'Battle.net'
+    'Riot Games'           = 'Riot'
+    'EA app'               = 'EA'
+    'Origin'               = 'EA'
+    'Ubisoft Connect'      = 'Ubisoft'
+    'Xbox'                 = 'Xbox'
+    'Xbox Game Pass'       = 'Xbox'
+}
+
+function Get-LauncherFromPackage {
+    param([string]$PackageFamilyName)
+
+    if ([string]::IsNullOrWhiteSpace($PackageFamilyName)) { return $null }
+    if ($PackageFamilyName -match '^ElectronicArts') { return 'EA' }
+    if ($PackageFamilyName -match '^Ubisoft\.') { return 'Ubisoft' }
+    if ($PackageFamilyName -match '^Blizzard') { return 'Battle.net' }
+    if ($PackageFamilyName -match '^Riot') { return 'Riot' }
+    return 'Xbox'
+}
+
+function Get-LauncherFromPublisher {
+    param([string[]]$Publishers)
+
+    $text = (@($Publishers) | Where-Object { $_ }) -join ' | '
+    if ([string]::IsNullOrWhiteSpace($text)) { return $null }
+    if ($text -match 'Electronic Arts|\bEA\b') { return 'EA' }
+    if ($text -match 'Ubisoft') { return 'Ubisoft' }
+    if ($text -match 'Blizzard') { return 'Battle.net' }
+    if ($text -match 'Riot Games') { return 'Riot' }
+    return $null
+}
+
+function Get-GameLauncher {
+    param([string]$Source, [string]$GameId, [string[]]$Publishers)
+
+    $launcher = $null
+    if ($Source -and $script:SourceLauncher.ContainsKey($Source)) {
+        $launcher = $script:SourceLauncher[$Source]
+    }
+
+    # Only the Microsoft Store sources hide the launcher; everything else is
+    # already named after the store you launch from.
+    if (-not $launcher -or $launcher -eq 'Xbox') {
+        if ($GameId -match '^(Origin|OFB)[.:-]') { $launcher = 'EA' }
+        elseif ($GameId -match '^Ubisoft[.\-]') { $launcher = 'Ubisoft' }
+        elseif ($GameId -match '^Blizzard') { $launcher = 'Battle.net' }
+        elseif ($GameId -match '^Riot') { $launcher = 'Riot' }
+        elseif ($launcher -eq 'Xbox') { $launcher = $null }
+    }
+
+    if (-not $launcher) {
+        $launcher = Get-LauncherFromPublisher -Publishers $Publishers
+    }
+    if (-not $launcher) { $launcher = 'Xbox' }
+
+    return $launcher
+}
+
+function Get-ProductLauncher {
+    param($Product)
+
+    # An EA Play title always runs in the EA app, whatever the package says.
+    if ($Product.IsEaPlay) { return 'EA' }
+    $launcher = Get-LauncherFromPackage -PackageFamilyName ([string]$Product.Package)
+    if ($launcher) { return $launcher }
+    $launcher = Get-LauncherFromPublisher -Publishers @($Product.Publisher)
+    if ($launcher) { return $launcher }
+    return 'Xbox'
+}
+
+# ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
 
@@ -305,7 +396,7 @@ function Get-XboxCatalogList {
 }
 
 function Get-XboxProducts {
-    param([string[]]$Ids)
+    param([string[]]$Ids, [switch]$ResolveBundles)
 
     $products = New-Object System.Collections.Generic.List[object]
     $chunkSize = 100
@@ -320,14 +411,47 @@ function Get-XboxProducts {
         foreach ($p in @($result.Products)) {
             if (-not $p) { continue }
             $loc = @($p.LocalizedProperties)[0]
+            $props = $p.Properties
+
+            # A catalogue entry is often a bundle; the package (and therefore the
+            # launcher) lives on the product it bundles.
+            $bundles = @()
+            foreach ($avail in @($p.DisplaySkuAvailabilities)) {
+                $skuProps = $avail.Sku.Properties
+                if (-not $skuProps -or -not $skuProps.BundledSkus) { continue }
+                foreach ($b in @($skuProps.BundledSkus)) {
+                    if ($b -and $b.BigId) { $bundles += [string]$b.BigId }
+                }
+            }
+
             $products.Add([pscustomobject]@{
                 Id         = $p.ProductId
                 Title      = $loc.ProductTitle
                 Publisher  = $loc.PublisherName
                 Type       = $p.ProductType
                 # already part of the response; free to keep
-                Categories = @($p.Properties.Categories | Where-Object { $_ })
+                Categories = @($props.Categories | Where-Object { $_ })
+                Package    = [string]$props.PackageFamilyName
+                Bundles    = @($bundles | Select-Object -Unique)
             })
+        }
+    }
+
+    if ($ResolveBundles) {
+        $need = @($products | Where-Object { -not $_.Package -and @($_.Bundles).Count -gt 0 })
+        if ($need.Count -gt 0) {
+            Write-GfnLog "Resolving the package for $($need.Count) bundled Game Pass titles"
+            $bundleIds = @($need | ForEach-Object { $_.Bundles } | Select-Object -Unique)
+            $packages = @{}
+            foreach ($b in @(Get-XboxProducts -Ids $bundleIds)) {
+                if ($b -and $b.Package) { $packages[$b.Id] = $b.Package }
+            }
+            foreach ($p in $products) {
+                if ($p.Package) { continue }
+                foreach ($bundleId in @($p.Bundles)) {
+                    if ($packages.ContainsKey($bundleId)) { $p.Package = $packages[$bundleId]; break }
+                }
+            }
         }
     }
 
@@ -339,11 +463,13 @@ function Get-GamePassCatalog {
 
     # Two caches:
     #   gamepass.json         assembled list, refreshed at most CacheHours
-    #   gamepass-details.json productId -> { Title, Publisher, Categories }
+    #   gamepass-details.json productId -> { Title, Publisher, Categories, Package }
     # The catalogue API returns ~78 KB per product (image metadata, SKUs, long
-    # descriptions) and we only need four fields, so details are fetched once per
-    # product and kept across refreshes. A normal refresh downloads only the id
-    # lists plus whatever was added since.
+    # descriptions) and we only need a handful of fields, so details are fetched
+    # once per product and kept across refreshes. A normal refresh downloads only
+    # the id lists plus whatever was added since. A cache written before the
+    # `Package` field existed is refilled on the next run: the package is what
+    # tells an EA Play or Ubisoft title apart from a native Xbox app one.
     $cache = Join-Path (Get-GfnDataDir) 'gamepass.json'
     if (-not $ForceRefresh) {
         $cached = Get-CachedJson -Path $cache -MaxAgeHours $script:Config.CacheHours
@@ -370,16 +496,20 @@ function Get-GamePassCatalog {
         }
     }
 
-    $missing = @($pcIds | Where-Object { -not $details.ContainsKey($_) })
+    $missing = @($pcIds | Where-Object {
+        $d = $details[$_]
+        (-not $d) -or -not (@($d.PSObject.Properties.Name) -contains 'Package')
+    })
     if ($missing.Count -gt 0) {
-        Write-GfnStatus "Fetching details for $($missing.Count) new Game Pass titles (first run: ~40 MB)..."
+        Write-GfnStatus "Fetching details for $($missing.Count) Game Pass titles (first run: ~40 MB)..."
         $fetchCount = $missing.Count
-        foreach ($p in @(Get-XboxProducts -Ids $missing)) {
+        foreach ($p in @(Get-XboxProducts -Ids $missing -ResolveBundles)) {
             if (-not $p) { continue }
             $details[$p.Id] = [pscustomobject]@{
                 Title      = $p.Title
                 Publisher  = $p.Publisher
                 Categories = @($p.Categories)
+                Package    = [string]$p.Package
             }
         }
         Write-GfnLog "Fetched details for $fetchCount new titles"
@@ -402,6 +532,7 @@ function Get-GamePassCatalog {
             Title      = $d.Title
             Publisher  = $d.Publisher
             Categories = @($d.Categories)
+            Package    = [string]$d.Package
             IsEaPlay   = $eaSet.ContainsKey($id)
         })
     }
@@ -716,6 +847,7 @@ function Get-LibrarySnapshot {
             name           = $game.Name
             sortName       = if ($game.SortingName) { $game.SortingName } else { $game.Name }
             store          = $sourceName
+            launcher       = Get-GameLauncher -Source $sourceName -GameId ([string]$game.GameId) -Publishers @(ConvertTo-NameList $game.PublisherIds $developers)
             access         = $access
             gameId         = $game.GameId
             platforms      = @(ConvertTo-NameList $game.PlatformIds $platforms)
@@ -866,6 +998,9 @@ function Invoke-GfnCheckCore {
                 id         = $p.Id
                 name       = $p.Title
                 publisher  = $p.Publisher
+                # where pressing Play actually sends you: the EA app for EA Play,
+                # Ubisoft Connect for Ubisoft, Battle.net for Blizzard, ...
+                launcher   = Get-ProductLauncher -Product $p
                 genres     = @($p.Categories)
                 gfn        = $status
                 gfnTitle   = if ($match) { $match.GfnTitle } else { $null }
