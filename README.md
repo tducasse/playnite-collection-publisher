@@ -18,8 +18,9 @@ A static site (no backend, no CDN, no build step) with:
 - **one row per game**, not per purchase — a title owned on Steam *and* available
   via Game Pass is one line showing both routes
 - a **segmented filter**: `All` / `On GFN` / `Not on GFN`, plus genre and store
-- **sortable columns**: name, store, GFN status, critic and community scores
-- **store links** (only from metadata that actually exists)
+- **one click per game** opens its store page (Steam/Epic/GOG/itch from Playnite
+  metadata, the Microsoft Store page for Game Pass titles built from the product id)
+- **sorting**: A–Z, best critics, best community, newest
 - a **search box** that answers "do I have this?" and "can I stream it?"
 - shareable URLs (`#gfn=yes&genre=Racing`), dark mode, phone-friendly
 
@@ -122,7 +123,7 @@ overwritten.
   "stats": { "streamable": 522, "notStreamable": 1816, … },
   "games": [ { "name": "Hades", "store": "Steam", "access": "owned",
                "gfn": "yes|other|no|na", "gfnStores": ["STEAM"],
-               "sync": "auto|mark|claim+mark", "playtime": 430,
+               "sync": "auto|mark|claim+mark", "releaseDate": "2020-09-17",
                "criticScore": 92, "links": [ { "name": "Steam", "url": "…" } ], … } ],
   "gamePass": [ { "name": "Hades II", "gfn": "no", … } ]
 }

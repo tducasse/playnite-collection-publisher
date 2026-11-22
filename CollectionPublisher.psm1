@@ -321,10 +321,12 @@ function Get-XboxProducts {
             if (-not $p) { continue }
             $loc = @($p.LocalizedProperties)[0]
             $products.Add([pscustomobject]@{
-                Id        = $p.ProductId
-                Title     = $loc.ProductTitle
-                Publisher = $loc.PublisherName
-                Type      = $p.ProductType
+                Id         = $p.ProductId
+                Title      = $loc.ProductTitle
+                Publisher  = $loc.PublisherName
+                Type       = $p.ProductType
+                # already part of the response; free to keep
+                Categories = @($p.Properties.Categories | Where-Object { $_ })
             })
         }
     }
@@ -679,10 +681,7 @@ function Get-LibrarySnapshot {
             series         = if ($game.SeriesIds -and @($game.SeriesIds).Count -gt 0) { ($series[$game.SeriesIds[0]]) } else { $null }
             releaseDate    = $releaseDate
             year           = $year
-            playtime       = [int][Math]::Round($game.Playtime / 60)
-            playCount      = [int]$game.PlayCount
             added          = if ($game.Added) { $game.Added.ToString('o') } else { $null }
-            lastPlayed     = if ($game.LastActivity) { $game.LastActivity.ToString('o') } else { $null }
             completion     = if ($game.CompletionStatusId -and $completion.ContainsKey($game.CompletionStatusId)) { $completion[$game.CompletionStatusId] } else { $null }
             userScore      = $game.UserScore
             communityScore = $game.CommunityScore
@@ -818,8 +817,10 @@ function Invoke-GfnCheckCore {
             }
 
             $gpRows.Add([pscustomobject]@{
+                id         = $p.Id
                 name       = $p.Title
                 publisher  = $p.Publisher
+                genres     = @($p.Categories)
                 gfn        = $status
                 gfnTitle   = if ($match) { $match.GfnTitle } else { $null }
                 gfnStores  = if ($match) { $match.GfnStores } else { @() }
