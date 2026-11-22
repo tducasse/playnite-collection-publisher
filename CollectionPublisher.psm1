@@ -900,6 +900,15 @@ function Invoke-GfnCheckCore {
     $stats = @{ streamable = 0; notStreamable = 0; wrongStore = 0; gamePassTotal = 0; gamePassNotOnGfn = 0 }
 
     foreach ($game in $GameList) {
+        # A snapshot written before `launcher` existed has no such field: derive
+        # it here so old snapshot.json files still publish correct labels.
+        if (-not (@($game.PSObject.Properties.Name) -contains 'launcher') -or -not $game.launcher) {
+            $game | Add-Member -NotePropertyName launcher -NotePropertyValue (Get-GameLauncher `
+                -Source ([string]$game.store) `
+                -GameId ([string]$game.gameId) `
+                -Publishers @($game.publishers)) -Force
+        }
+
         $storeCode = $null
         if ($game.store -and $script:Config.Stores.ContainsKey([string]$game.store)) {
             $storeCode = $script:Config.Stores[[string]$game.store]
