@@ -100,6 +100,14 @@ overwritten.
 - `AccessBySource` — *owned* vs *subscription access*. PC Game Pass entitles games
   that run in other launchers, so `EA app`/`Ubisoft Connect` are `gamepass` here,
   not "EA Play"/"Ubisoft+".
+- `Owned` — a store licence never says *why* you have it. Games in the EA Play
+  catalogue are treated as entitlements; anything else in the EA app is a
+  purchase. For the rest (EA Play titles you actually bought, Ubisoft, Xbox) list
+  the title here and it is shown as owned:
+
+  ```json
+  "Owned": ["It Takes Two", "Star Wars Outlaws"]
+  ```
 - `SyncByStore` — `auto` (default), `mark` (*Mark as owned* in GFN), or
   `claim+mark`. Set it per store to match what GFN's *Game store accounts* screen
   says about your connectors.

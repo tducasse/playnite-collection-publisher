@@ -541,6 +541,12 @@ function Get-PublishSettings {
         #   claim+mark - licence lives in another app first (EA Play via Game Pass)
         # Anything not listed is treated as auto.
         SyncByStore = @{ 'Epic' = 'mark' }
+
+        # Stores that can hold BOTH purchases and subscription licences (EA app,
+        # Ubisoft Connect, Xbox). Playnite does not record which, so anything you
+        # actually bought belongs here - it is then shown as owned, not as an
+        # entitlement.
+        Owned = @()
         AccessBySource = @{
             'Steam'                = 'owned'
             'Epic'                 = 'owned'
@@ -828,6 +834,30 @@ function Invoke-GfnCheckCore {
 
     $stats.gamePassTotal = $gpTotal
 
+    # --- access correction -------------------------------------------------
+    # A licence in the EA app is either a purchase or an EA Play entitlement.
+    # If the game is not in the EA Play catalogue at all, Game Pass cannot be the
+    # reason you have it, so it must be a purchase. Same for anything listed in
+    # the Owned setting.
+    $eaPlayKeys = @{}
+    foreach ($p in $gpCatalog) { if ($p.IsEaPlay) { $eaPlayKeys[(ConvertTo-GfnKey -Title $p.Title)] = $true } }
+
+    $ownedKeys = @{}
+    if ($script:Config.OwnedNames) {
+        foreach ($name in @($script:Config.OwnedNames)) { $ownedKeys[(ConvertTo-GfnKey -Title $name)] = $true }
+    }
+
+    $corrected = 0
+    foreach ($game in $GameList) {
+        if ($game.access -eq 'owned') { continue }
+        $key = ConvertTo-GfnKey -Title $game.name
+        if ($ownedKeys.ContainsKey($key)) { $game.access = 'owned'; $corrected++; continue }
+        if ($game.store -eq 'EA app' -and $game.access -ne 'owned' -and -not $eaPlayKeys.ContainsKey($key)) {
+            $game.access = 'owned'; $corrected++
+        }
+    }
+    if ($corrected) { Write-GfnLog "Access corrected for $corrected games (purchases vs EA Play)" }
+
     Write-GfnLog ("Check finished in {0:n1}s" -f ((Get-Date) - $started).TotalSeconds)
 
     return [pscustomobject]@{
@@ -992,6 +1022,7 @@ function Invoke-Publish {
     if (-not $Settings) { $Settings = Get-PublishSettings }
 
     if ($Settings.SyncByStore) { $script:Config.SyncByStore = $Settings.SyncByStore }
+    if ($Settings.Owned) { $script:Config.OwnedNames = @($Settings.Owned) }
     if ($Settings.AccessBySource) { $script:Config.AccessBySource = $Settings.AccessBySource }
 
     $script:NotifyProgress = -not $Quiet
