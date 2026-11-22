@@ -1,0 +1,6 @@
+Id: CollectionPublisher_93bfb170-2d08-4b96-b23d-d89be557b9fa
+Name: Collection publisher
+Author: tducasse
+Version: 1.0
+Module: CollectionPublisher.psm1
+Type: Script

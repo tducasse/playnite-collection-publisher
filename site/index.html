@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>My games</title>
+<meta name="description" content="Everything I can play, and whether it works on GeForce NOW.">
+<link rel="stylesheet" href="styles.css">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎮</text></svg>">
+</head>
+<body>
+
+<header class="top">
+  <div class="top-inner">
+    <h1>My games</h1>
+    <p id="summary" class="summary"></p>
+  </div>
+  <div class="search-wrap">
+    <input id="q" type="search" placeholder="Do I have…" autocomplete="off" spellcheck="false" aria-label="Search games">
+  </div>
+  <div class="segments" role="group" aria-label="GeForce NOW availability">
+    <button class="seg is-active" data-gfn="all">All <span class="n"></span></button>
+    <button class="seg" data-gfn="yes">On GFN <span class="n"></span></button>
+    <button class="seg" data-gfn="no">Not on GFN <span class="n"></span></button>
+  </div>
+</header>
+
+<main>
+  <div id="verdict"></div>
+
+  <div class="controls" id="controls">
+    <select id="genre" aria-label="Genre"><option value="">All genres</option></select>
+    <select id="store" aria-label="Store"><option value="">All stores</option></select>
+    <span id="count" class="count"></span>
+  </div>
+
+  <p id="hint" class="hint" hidden></p>
+
+  <div class="table-wrap">
+    <table class="games">
+      <thead>
+        <tr>
+          <th class="col-name"><button data-sort="name">Game</button></th>
+          <th class="col-stores"><button data-sort="store">Stores</button></th>
+          <th class="col-gfn"><button data-sort="gfn">GFN</button></th>
+          <th class="col-score num"><button data-sort="critic">Critics</button></th>
+          <th class="col-score num"><button data-sort="community">Community</button></th>
+          <th class="col-link"></th>
+        </tr>
+      </thead>
+      <tbody id="rows"></tbody>
+    </table>
+  </div>
+  <p id="empty" class="empty" hidden>Nothing here.</p>
+</main>
+
+<footer>
+  <span id="meta"></span>
+</footer>
+
+<script src="app.js"></script>
+</body>
+</html>

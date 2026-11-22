@@ -1,0 +1,18 @@
+# generated / personal data — never commit a game list or a local path
+data/
+*.snapshot.json
+snapshot.json
+result.json
+error.json
+settings.json
+overrides.json
+
+# test scratch
+tests/out/
+node_modules/
+package-lock.json
+
+# editors / OS
+.vscode/
+.DS_Store
+Thumbs.db
