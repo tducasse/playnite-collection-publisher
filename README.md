@@ -15,8 +15,10 @@ I actually play on GeForce NOW tonight, and what do I have to click first?"*
 
 A static site (no backend, no CDN, no build step) with:
 
-- **one row per game**, not per purchase — a title owned on Steam *and* available
-  via Game Pass is one line showing both routes
+- **one row per game**, not per purchase or per SKU — a title owned on Steam
+  *and* available via Game Pass is one line showing both routes, and the store's
+  edition suffix (`Gold Edition`, `Year 2 Edition`, `(PC)`, `™`) does not split
+  it into a second card
 - **two independent labels per game**: the launcher it really starts from
   (`Steam`, `Epic`, `GOG`, `EA`, `Ubisoft`, `Xbox`, `Battle.net`, `Riot`, `itch`)
   and, separately, `Game Pass` when the title is in the catalogue. An EA Play
