@@ -344,7 +344,10 @@ function Get-GroupAliases {
     }
 
     if (-not (Test-Path -LiteralPath $path)) {
-        ConvertTo-Json -InputObject $defaults -Depth 3 | Set-Content -LiteralPath $path -Encoding UTF8
+        # ConvertTo-Json escapes apostrophes (\u0027) - keep the file readable,
+        # it is meant to be edited by hand.
+        $json = (ConvertTo-Json -InputObject $defaults -Depth 3) -replace '\\u0027', "'"
+        [System.IO.File]::WriteAllText($path, $json, (New-Object System.Text.UTF8Encoding($true)))
     }
 
     $map = @{}
